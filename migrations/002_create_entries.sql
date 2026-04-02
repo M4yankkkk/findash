@@ -1,7 +1,12 @@
 -- 002_create_entries.sql
 -- Creates the financial_entries table with soft delete support.
 
-CREATE TYPE entry_type AS ENUM ('income', 'expense');
+DO $$
+BEGIN
+    CREATE TYPE entry_type AS ENUM ('income', 'expense');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
 
 CREATE TABLE IF NOT EXISTS financial_entries (
     id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

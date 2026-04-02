@@ -3,7 +3,12 @@
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
-CREATE TYPE user_role AS ENUM ('admin', 'manager', 'viewer');
+DO $$
+BEGIN
+    CREATE TYPE user_role AS ENUM ('admin', 'manager', 'viewer');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
 
 CREATE TABLE IF NOT EXISTS users (
     id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

@@ -2,7 +2,12 @@
 -- Creates the audit_logs table for tracking all significant system actions.
 -- Audit logs are append-only — no updates or deletes are ever performed on this table.
 
-CREATE TYPE audit_action AS ENUM ('CREATE', 'UPDATE', 'DELETE', 'ROLE_CHANGE', 'LOGIN');
+DO $$
+BEGIN
+    CREATE TYPE audit_action AS ENUM ('CREATE', 'UPDATE', 'DELETE', 'ROLE_CHANGE', 'LOGIN');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
 
 CREATE TABLE IF NOT EXISTS audit_logs (
     id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
