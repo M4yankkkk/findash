@@ -148,3 +148,40 @@ func (r *UserRepository) CountAll() (int, error) {
 	}
 	return count, nil
 }
+
+// ListByRole returns users of the given role with pagination.
+func (r *UserRepository) ListByRole(role models.Role, page, pageSize int) ([]*models.User, int, error) {
+	var total int
+	if err := r.db.QueryRow(`SELECT COUNT(*) FROM users WHERE role = $1`, role).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count users by role: %w", err)
+	}
+
+	offset := (page - 1) * pageSize
+	query := `
+		SELECT id, name, email, password, role, created_at, updated_at
+		FROM users
+		WHERE role = $1
+		ORDER BY created_at DESC
+		LIMIT $2 OFFSET $3`
+
+	rows, err := r.db.Query(query, role, pageSize, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list users by role: %w", err)
+	}
+	defer rows.Close()
+
+	var users []*models.User
+	for rows.Next() {
+		u := &models.User{}
+		if err := rows.Scan(
+			&u.ID, &u.Name, &u.Email,
+			&u.Password, &u.Role,
+			&u.CreatedAt, &u.UpdatedAt,
+		); err != nil {
+			return nil, 0, fmt.Errorf("scan user by role: %w", err)
+		}
+		users = append(users, u)
+	}
+
+	return users, total, rows.Err()
+}

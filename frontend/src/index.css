@@ -1,0 +1,49 @@
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ash-50: #f2f4f0;
+  --ash-100: #e6eae1;
+  --ash-200: #ccd5c3;
+  --ash-300: #b3c0a5;
+  --ash-400: #99aa88;
+  --ash-500: #80956a;
+  --ash-600: #667755;
+  --ash-700: #4d5a3f;
+  --ash-800: #333c2a;
+  --ash-900: #1a1e15;
+  --ash-950: #12150f;
+
+  --background: 100 17% 6%;
+  --foreground: 100 18% 92%;
+  --card: 100 13% 10%;
+  --card-foreground: 100 18% 92%;
+  --primary: 96 18% 50%;
+  --primary-foreground: 98 25% 10%;
+  --secondary: 101 15% 21%;
+  --secondary-foreground: 100 18% 92%;
+  --muted: 98 13% 17%;
+  --muted-foreground: 100 12% 70%;
+  --accent: 96 18% 38%;
+  --accent-foreground: 100 18% 92%;
+  --border: 101 15% 24%;
+  --input: 101 15% 24%;
+  --ring: 96 20% 52%;
+  --radius: 0.9rem;
+}
+
+* {
+  @apply border-border;
+}
+
+body {
+  @apply bg-background text-foreground;
+  background-image:
+    radial-gradient(circle at 0% 0%, rgba(128, 149, 106, 0.2), transparent 42%),
+    radial-gradient(circle at 100% 0%, rgba(102, 119, 85, 0.15), transparent 38%),
+    linear-gradient(180deg, rgba(26, 30, 21, 0.96) 0%, rgba(18, 21, 15, 0.98) 100%);
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+}

@@ -10,16 +10,18 @@ import (
 
 // EntryService handles all business logic for financial entries.
 type EntryService struct {
-	entryRepo *repository.EntryRepository
-	auditRepo *repository.AuditRepository
+	entryRepo      *repository.EntryRepository
+	auditRepo      *repository.AuditRepository
+	visibilityRepo *repository.VisibilityRepository
 }
 
 // NewEntryService creates a new EntryService.
 func NewEntryService(
 	entryRepo *repository.EntryRepository,
 	auditRepo *repository.AuditRepository,
+	visibilityRepo *repository.VisibilityRepository,
 ) *EntryService {
-	return &EntryService{entryRepo: entryRepo, auditRepo: auditRepo}
+	return &EntryService{entryRepo: entryRepo, auditRepo: auditRepo, visibilityRepo: visibilityRepo}
 }
 
 // CreateEntry creates a new financial entry for the requesting user.
@@ -68,6 +70,17 @@ func (s *EntryService) GetEntry(entryID, requestingUserID string, role models.Ro
 		return nil, nil
 	}
 
+	if role == models.RoleViewer {
+		visible, err := s.visibilityRepo.IsEntryVisibleToViewer(requestingUserID, entryID)
+		if err != nil {
+			return nil, fmt.Errorf("checking viewer visibility: %w", err)
+		}
+		if !visible {
+			return nil, nil
+		}
+		return entry, nil
+	}
+
 	// Ownership check — non-admins can only see their own entries
 	if role != models.RoleAdmin && entry.UserID != requestingUserID {
 		return nil, nil // Return nil to surface as 404, not 403 (avoids leaking record existence)
@@ -91,7 +104,15 @@ func (s *EntryService) ListEntries(
 		filter.PageSize = 20
 	}
 
-	// Admins see everything; others are scoped to their own entries
+	if role == models.RoleViewer {
+		entries, total, err := s.entryRepo.ListForViewer(filter, requestingUserID)
+		if err != nil {
+			return nil, 0, fmt.Errorf("listing viewer entries: %w", err)
+		}
+		return entries, total, nil
+	}
+
+	// Admins see everything; managers are scoped to their own entries.
 	scopedUserID := requestingUserID
 	if role == models.RoleAdmin {
 		scopedUserID = ""

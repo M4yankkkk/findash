@@ -13,18 +13,27 @@ type UpdateRoleInput struct {
 	Role models.Role `json:"role" binding:"required"`
 }
 
+// UpdateViewerVisibilityInput holds payload for replacing viewer-visible entries.
+type UpdateViewerVisibilityInput struct {
+	EntryIDs []string `json:"entry_ids" binding:"required"`
+}
+
 // UserService handles user management operations.
 type UserService struct {
-	userRepo  *repository.UserRepository
-	auditRepo *repository.AuditRepository
+	userRepo       *repository.UserRepository
+	auditRepo      *repository.AuditRepository
+	entryRepo      *repository.EntryRepository
+	visibilityRepo *repository.VisibilityRepository
 }
 
 // NewUserService creates a new UserService.
 func NewUserService(
 	userRepo *repository.UserRepository,
 	auditRepo *repository.AuditRepository,
+	entryRepo *repository.EntryRepository,
+	visibilityRepo *repository.VisibilityRepository,
 ) *UserService {
-	return &UserService{userRepo: userRepo, auditRepo: auditRepo}
+	return &UserService{userRepo: userRepo, auditRepo: auditRepo, entryRepo: entryRepo, visibilityRepo: visibilityRepo}
 }
 
 // ListUsers returns a paginated list of all users.
@@ -101,4 +110,109 @@ func (s *UserService) GetUser(userID string) (*models.UserResponse, error) {
 
 	resp := user.ToResponse()
 	return &resp, nil
+}
+
+// ListViewers returns paginated viewer users for visibility assignment workflows.
+func (s *UserService) ListViewers(page, pageSize int) ([]models.UserResponse, int, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+
+	viewers, total, err := s.userRepo.ListByRole(models.RoleViewer, page, pageSize)
+	if err != nil {
+		return nil, 0, fmt.Errorf("listing viewers: %w", err)
+	}
+
+	responses := make([]models.UserResponse, len(viewers))
+	for i, u := range viewers {
+		responses[i] = u.ToResponse()
+	}
+
+	return responses, total, nil
+}
+
+// GetViewerVisibility returns entry IDs visible to a viewer user.
+func (s *UserService) GetViewerVisibility(viewerID string) ([]string, error) {
+	viewer, err := s.userRepo.FindByID(viewerID)
+	if err != nil {
+		return nil, fmt.Errorf("finding viewer: %w", err)
+	}
+	if viewer == nil {
+		return nil, fmt.Errorf("viewer not found")
+	}
+	if viewer.Role != models.RoleViewer {
+		return nil, fmt.Errorf("target user is not a viewer")
+	}
+
+	ids, err := s.visibilityRepo.ListViewerEntryIDs(viewerID)
+	if err != nil {
+		return nil, fmt.Errorf("fetching viewer visibility: %w", err)
+	}
+
+	return ids, nil
+}
+
+// ReplaceViewerVisibility replaces all entries visible to a viewer.
+func (s *UserService) ReplaceViewerVisibility(viewerID string, entryIDs []string, actorID string, actorRole models.Role) error {
+	viewer, err := s.userRepo.FindByID(viewerID)
+	if err != nil {
+		return fmt.Errorf("finding viewer: %w", err)
+	}
+	if viewer == nil {
+		return fmt.Errorf("viewer not found")
+	}
+	if viewer.Role != models.RoleViewer {
+		return fmt.Errorf("target user is not a viewer")
+	}
+
+	uniqueIDs := make([]string, 0, len(entryIDs))
+	seen := make(map[string]struct{}, len(entryIDs))
+	for _, entryID := range entryIDs {
+		if entryID == "" {
+			continue
+		}
+		if _, ok := seen[entryID]; ok {
+			continue
+		}
+		seen[entryID] = struct{}{}
+		uniqueIDs = append(uniqueIDs, entryID)
+	}
+
+	for _, entryID := range uniqueIDs {
+		entry, err := s.entryRepo.FindByID(entryID)
+		if err != nil {
+			return fmt.Errorf("finding entry: %w", err)
+		}
+		if entry == nil {
+			return fmt.Errorf("entry not found: %s", entryID)
+		}
+
+		if actorRole == models.RoleManager {
+			owned, err := s.entryRepo.IsOwnedBy(entryID, actorID)
+			if err != nil {
+				return fmt.Errorf("checking entry ownership: %w", err)
+			}
+			if !owned {
+				return fmt.Errorf("forbidden entry assignment")
+			}
+		}
+	}
+
+	if err := s.visibilityRepo.ReplaceViewerEntries(viewerID, uniqueIDs, actorID); err != nil {
+		return fmt.Errorf("replacing viewer visibility: %w", err)
+	}
+
+	_ = s.auditRepo.Log(&models.AuditLog{
+		ID:         uuid.New().String(),
+		UserID:     actorID,
+		Action:     models.AuditActionUpdate,
+		Resource:   "viewer_visibility",
+		ResourceID: viewerID,
+		Detail:     fmt.Sprintf("Updated viewer visibility for %s with %d entries", viewer.Email, len(uniqueIDs)),
+	})
+
+	return nil
 }

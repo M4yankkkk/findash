@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/M4yankkkk/findash/internal/middleware"
 	"github.com/M4yankkkk/findash/internal/models"
@@ -107,4 +108,71 @@ func (h *UserHandler) UpdateRole(c *gin.Context) {
 	}
 
 	utils.OK(c, "role updated successfully", nil)
+}
+
+// ListViewers returns paginated users with viewer role for assignment flows.
+func (h *UserHandler) ListViewers(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+
+	viewers, total, err := h.userService.ListViewers(page, pageSize)
+	if err != nil {
+		utils.InternalError(c, "failed to list viewers")
+		return
+	}
+
+	utils.Paginated(c, viewers, total, page, pageSize)
+}
+
+// GetViewerVisibility returns entry IDs visible to a specific viewer.
+func (h *UserHandler) GetViewerVisibility(c *gin.Context) {
+	viewerID := c.Param("id")
+
+	entryIDs, err := h.userService.GetViewerVisibility(viewerID)
+	if err != nil {
+		switch err.Error() {
+		case "viewer not found":
+			utils.NotFound(c, err.Error())
+		case "target user is not a viewer":
+			utils.BadRequest(c, err.Error())
+		default:
+			utils.InternalError(c, "failed to fetch viewer visibility")
+		}
+		return
+	}
+
+	utils.OK(c, "viewer visibility retrieved", gin.H{"entry_ids": entryIDs})
+}
+
+// UpdateViewerVisibility replaces all visible entries for a viewer.
+func (h *UserHandler) UpdateViewerVisibility(c *gin.Context) {
+	viewerID := c.Param("id")
+	actorID := c.GetString(middleware.ContextKeyUserID)
+	actorRole := models.Role(c.GetString(middleware.ContextKeyRole))
+
+	var input services.UpdateViewerVisibilityInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+
+	if err := h.userService.ReplaceViewerVisibility(viewerID, input.EntryIDs, actorID, actorRole); err != nil {
+		switch err.Error() {
+		case "viewer not found":
+			utils.NotFound(c, err.Error())
+		case "target user is not a viewer":
+			utils.BadRequest(c, err.Error())
+		case "forbidden entry assignment":
+			utils.Forbidden(c, err.Error())
+		default:
+			if strings.Contains(err.Error(), "entry not found:") {
+				utils.BadRequest(c, err.Error())
+				return
+			}
+			utils.InternalError(c, "failed to update viewer visibility")
+		}
+		return
+	}
+
+	utils.OK(c, "viewer visibility updated", nil)
 }

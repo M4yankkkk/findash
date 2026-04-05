@@ -152,6 +152,97 @@ func (r *EntryRepository) List(filter models.EntryFilter, userID string) ([]*mod
 	return entries, total, rows.Err()
 }
 
+// ListForViewer returns entries assigned to a viewer via visibility mapping.
+func (r *EntryRepository) ListForViewer(filter models.EntryFilter, viewerID string) ([]*models.FinancialEntry, int, error) {
+	conditions := []string{"e.deleted_at IS NULL", fmt.Sprintf("v.viewer_id = $%d", 1)}
+	args := []interface{}{viewerID}
+	argIdx := 2
+
+	if filter.Category != "" {
+		conditions = append(conditions, fmt.Sprintf("LOWER(e.category) = LOWER($%d)", argIdx))
+		args = append(args, filter.Category)
+		argIdx++
+	}
+
+	if filter.Type != "" {
+		conditions = append(conditions, fmt.Sprintf("e.type = $%d", argIdx))
+		args = append(args, filter.Type)
+		argIdx++
+	}
+
+	if filter.DateFrom != nil {
+		conditions = append(conditions, fmt.Sprintf("e.date >= $%d", argIdx))
+		args = append(args, *filter.DateFrom)
+		argIdx++
+	}
+
+	if filter.DateTo != nil {
+		conditions = append(conditions, fmt.Sprintf("e.date <= $%d", argIdx))
+		args = append(args, *filter.DateTo)
+		argIdx++
+	}
+
+	where := "WHERE " + strings.Join(conditions, " AND ")
+
+	var total int
+	countQuery := fmt.Sprintf(`
+		SELECT COUNT(*)
+		FROM financial_entries e
+		JOIN entry_visibility_assignments v ON v.entry_id = e.id
+		%s`, where)
+	if err := r.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count viewer entries: %w", err)
+	}
+
+	offset := (filter.Page - 1) * filter.PageSize
+	listArgs := append(args, filter.PageSize, offset)
+	listQuery := fmt.Sprintf(`
+		SELECT e.id, e.user_id, e.title, e.amount, e.type, e.category, e.description,
+		       e.date, e.created_at, e.updated_at, e.deleted_at
+		FROM financial_entries e
+		JOIN entry_visibility_assignments v ON v.entry_id = e.id
+		%s
+		ORDER BY e.date DESC, e.created_at DESC
+		LIMIT $%d OFFSET $%d`, where, argIdx, argIdx+1)
+
+	rows, err := r.db.Query(listQuery, listArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list viewer entries: %w", err)
+	}
+	defer rows.Close()
+
+	var entries []*models.FinancialEntry
+	for rows.Next() {
+		e := &models.FinancialEntry{}
+		if err := rows.Scan(
+			&e.ID, &e.UserID, &e.Title, &e.Amount,
+			&e.Type, &e.Category, &e.Description, &e.Date,
+			&e.CreatedAt, &e.UpdatedAt, &e.DeletedAt,
+		); err != nil {
+			return nil, 0, fmt.Errorf("scan viewer entry: %w", err)
+		}
+		entries = append(entries, e)
+	}
+
+	return entries, total, rows.Err()
+}
+
+// IsOwnedBy returns true if the entry belongs to the given user.
+func (r *EntryRepository) IsOwnedBy(entryID, userID string) (bool, error) {
+	const query = `
+		SELECT EXISTS (
+			SELECT 1 FROM financial_entries
+			WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+		)`
+
+	var exists bool
+	if err := r.db.QueryRow(query, entryID, userID).Scan(&exists); err != nil {
+		return false, fmt.Errorf("check entry ownership: %w", err)
+	}
+
+	return exists, nil
+}
+
 // Update applies partial updates to an entry. Only non-nil fields are changed.
 func (r *EntryRepository) Update(id string, input models.UpdateEntryInput) (*models.FinancialEntry, error) {
 	setClauses := []string{"updated_at = NOW()"}

@@ -22,10 +22,11 @@ func Setup(r *gin.Engine, db *database.DB, cfg *config.Config) {
 	entryRepo := repository.NewEntryRepository(db)
 	analyticsRepo := repository.NewAnalyticsRepository(db)
 
+	visibilityRepo := repository.NewVisibilityRepository(db)
 	// ── Services ──────────────────────────────────────────────────────────────
 	authService := services.NewAuthService(userRepo, auditRepo, cfg.JWTSecret, cfg.JWTExpiryHours)
-	userService := services.NewUserService(userRepo, auditRepo)
-	entryService := services.NewEntryService(entryRepo, auditRepo)
+	userService := services.NewUserService(userRepo, auditRepo, entryRepo, visibilityRepo)
+	entryService := services.NewEntryService(entryRepo, auditRepo, visibilityRepo)
 	analyticsService := services.NewAnalyticsService(analyticsRepo)
 
 	// ── Handlers ──────────────────────────────────────────────────────────────
@@ -61,6 +62,14 @@ func Setup(r *gin.Engine, db *database.DB, cfg *config.Config) {
 			users.GET("", userHandler.ListUsers)
 			users.GET("/:id", userHandler.GetUser)
 			users.PATCH("/:id/role", userHandler.UpdateRole)
+		}
+
+		visibility := auth.Group("/viewer-visibility")
+		visibility.Use(middleware.RequireManagerOrAdmin())
+		{
+			visibility.GET("/viewers", userHandler.ListViewers)
+			visibility.GET("/:id/entries", userHandler.GetViewerVisibility)
+			visibility.PUT("/:id/entries", userHandler.UpdateViewerVisibility)
 		}
 
 		// Entries — all authenticated users, scoping handled in service layer
