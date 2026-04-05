@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -20,6 +21,7 @@ type Config struct {
 	DBSSLMode      string
 	JWTSecret      string
 	JWTExpiryHours int
+	AllowedOrigins []string
 }
 
 // Load reads the .env file (if present) and populates a Config struct.
@@ -33,6 +35,9 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("invalid JWT_EXPIRY_HOURS: %w", err)
 	}
 
+	origins := getEnv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
+	allowedOrigins := parseOrigins(origins)
+
 	cfg := &Config{
 		Port:           getEnv("PORT", "8080"),
 		GinMode:        getEnv("GIN_MODE", "debug"),
@@ -44,6 +49,7 @@ func Load() (*Config, error) {
 		DBSSLMode:      getEnv("DB_SSLMODE", "disable"),
 		JWTSecret:      getEnv("JWT_SECRET", ""),
 		JWTExpiryHours: jwtExpiry,
+		AllowedOrigins: allowedOrigins,
 	}
 
 	if err := cfg.validate(); err != nil {
@@ -78,4 +84,15 @@ func getEnv(key, fallback string) string {
 		return val
 	}
 	return fallback
+}
+
+// parseOrigins splits a comma-separated string of origins into a slice.
+func parseOrigins(originsStr string) []string {
+	var origins []string
+	for _, origin := range strings.Split(originsStr, ",") {
+		if trimmed := strings.TrimSpace(origin); trimmed != "" {
+			origins = append(origins, trimmed)
+		}
+	}
+	return origins
 }

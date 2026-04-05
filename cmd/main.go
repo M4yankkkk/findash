@@ -56,9 +56,9 @@ func main() {
 
 	r := gin.Default()
 
-	// CORS — allows the React frontend (port 5173) to call the API
+	// CORS — allows configured origins to call the API (from ALLOWED_ORIGINS env var)
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:3000"},
+		AllowOrigins:     cfg.AllowedOrigins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		ExposeHeaders:    []string{"Content-Length"},
