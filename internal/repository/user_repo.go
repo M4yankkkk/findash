@@ -22,16 +22,16 @@ func NewUserRepository(db *database.DB) *UserRepository {
 // Create inserts a new user and returns the created record.
 func (r *UserRepository) Create(user *models.User) (*models.User, error) {
 	query := `
-		INSERT INTO users (id, name, email, password, role, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-		RETURNING id, name, email, password, role, created_at, updated_at`
+		INSERT INTO users (id, name, email, password, role, is_active, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+		RETURNING id, name, email, password, role, is_active, created_at, updated_at`
 
 	created := &models.User{}
 	err := r.db.QueryRow(query,
-		user.ID, user.Name, user.Email, user.Password, user.Role,
+		user.ID, user.Name, user.Email, user.Password, user.Role, user.IsActive,
 	).Scan(
 		&created.ID, &created.Name, &created.Email,
-		&created.Password, &created.Role,
+		&created.Password, &created.Role, &created.IsActive,
 		&created.CreatedAt, &created.UpdatedAt,
 	)
 	if err != nil {
@@ -44,14 +44,14 @@ func (r *UserRepository) Create(user *models.User) (*models.User, error) {
 // FindByEmail returns a user matching the given email, or nil if not found.
 func (r *UserRepository) FindByEmail(email string) (*models.User, error) {
 	query := `
-		SELECT id, name, email, password, role, created_at, updated_at
+		SELECT id, name, email, password, role, is_active, created_at, updated_at
 		FROM users
 		WHERE email = $1`
 
 	user := &models.User{}
 	err := r.db.QueryRow(query, email).Scan(
 		&user.ID, &user.Name, &user.Email,
-		&user.Password, &user.Role,
+		&user.Password, &user.Role, &user.IsActive,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
@@ -67,14 +67,14 @@ func (r *UserRepository) FindByEmail(email string) (*models.User, error) {
 // FindByID returns a user matching the given ID, or nil if not found.
 func (r *UserRepository) FindByID(id string) (*models.User, error) {
 	query := `
-		SELECT id, name, email, password, role, created_at, updated_at
+		SELECT id, name, email, password, role, is_active, created_at, updated_at
 		FROM users
 		WHERE id = $1`
 
 	user := &models.User{}
 	err := r.db.QueryRow(query, id).Scan(
 		&user.ID, &user.Name, &user.Email,
-		&user.Password, &user.Role,
+		&user.Password, &user.Role, &user.IsActive,
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
@@ -97,7 +97,7 @@ func (r *UserRepository) ListAll(page, pageSize int) ([]*models.User, int, error
 
 	offset := (page - 1) * pageSize
 	query := `
-		SELECT id, name, email, password, role, created_at, updated_at
+		SELECT id, name, email, password, role, is_active, created_at, updated_at
 		FROM users
 		ORDER BY created_at DESC
 		LIMIT $1 OFFSET $2`
@@ -113,7 +113,7 @@ func (r *UserRepository) ListAll(page, pageSize int) ([]*models.User, int, error
 		u := &models.User{}
 		if err := rows.Scan(
 			&u.ID, &u.Name, &u.Email,
-			&u.Password, &u.Role,
+			&u.Password, &u.Role, &u.IsActive,
 			&u.CreatedAt, &u.UpdatedAt,
 		); err != nil {
 			return nil, 0, fmt.Errorf("scan user: %w", err)
@@ -158,7 +158,7 @@ func (r *UserRepository) ListByRole(role models.Role, page, pageSize int) ([]*mo
 
 	offset := (page - 1) * pageSize
 	query := `
-		SELECT id, name, email, password, role, created_at, updated_at
+		SELECT id, name, email, password, role, is_active, created_at, updated_at
 		FROM users
 		WHERE role = $1
 		ORDER BY created_at DESC
@@ -175,7 +175,7 @@ func (r *UserRepository) ListByRole(role models.Role, page, pageSize int) ([]*mo
 		u := &models.User{}
 		if err := rows.Scan(
 			&u.ID, &u.Name, &u.Email,
-			&u.Password, &u.Role,
+			&u.Password, &u.Role, &u.IsActive,
 			&u.CreatedAt, &u.UpdatedAt,
 		); err != nil {
 			return nil, 0, fmt.Errorf("scan user by role: %w", err)
@@ -184,4 +184,20 @@ func (r *UserRepository) ListByRole(role models.Role, page, pageSize int) ([]*mo
 	}
 
 	return users, total, rows.Err()
+}
+
+// UpdateStatus sets a user's active/inactive status.
+func (r *UserRepository) UpdateStatus(userID string, isActive bool) error {
+	query := `UPDATE users SET is_active = $1, updated_at = NOW() WHERE id = $2`
+	result, err := r.db.Exec(query, isActive, userID)
+	if err != nil {
+		return fmt.Errorf("update status: %w", err)
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("user not found")
+	}
+
+	return nil
 }

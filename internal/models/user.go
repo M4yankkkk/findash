@@ -23,6 +23,7 @@ type User struct {
 	Email     string    `json:"email"`
 	Password  string    `json:"-"` // Exclude password from JSON responses
 	Role      Role      `json:"role"`
+	IsActive  bool      `json:"is_active"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -33,6 +34,7 @@ type UserResponse struct {
 	Name      string    `json:"name"`
 	Email     string    `json:"email"`
 	Role      Role      `json:"role"`
+	IsActive  bool      `json:"is_active"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -43,6 +45,7 @@ func (u *User) ToResponse() UserResponse {
 		Name:      u.Name,
 		Email:     u.Email,
 		Role:      u.Role,
+		IsActive:  u.IsActive,
 		CreatedAt: u.CreatedAt,
 	}
 }

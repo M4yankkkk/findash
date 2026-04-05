@@ -45,6 +45,27 @@ func (h *AnalyticsHandler) GetSummary(c *gin.Context) {
 	utils.OK(c, "summary retrieved", summary)
 }
 
+// GetDashboardSummary godoc
+// @Summary      Get dashboard summary
+// @Description  Returns summary totals scoped for dashboard usage. Viewers see assigned entries only.
+// @Tags         dashboard
+// @Produce      json
+// @Success      200  {object}  utils.APIResponse
+// @Security     BearerAuth
+// @Router       /dashboard/summary [get]
+func (h *AnalyticsHandler) GetDashboardSummary(c *gin.Context) {
+	userID := c.GetString(middleware.ContextKeyUserID)
+	role := models.Role(c.GetString(middleware.ContextKeyRole))
+
+	summary, err := h.analyticsService.GetDashboardSummary(userID, role)
+	if err != nil {
+		utils.InternalError(c, "failed to fetch dashboard summary")
+		return
+	}
+
+	utils.OK(c, "dashboard summary retrieved", summary)
+}
+
 // GetByCategory godoc
 // @Summary      Get breakdown by category
 // @Description  Returns income and expense totals grouped by category, ordered by total descending.

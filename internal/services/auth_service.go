@@ -86,6 +86,7 @@ func (s *AuthService) Register(input RegisterInput) (*AuthResponse, error) {
 		Email:    input.Email,
 		Password: string(hashed),
 		Role:     role,
+		IsActive: true,
 	}
 
 	created, err := s.userRepo.Create(user)
@@ -125,6 +126,9 @@ func (s *AuthService) Login(input LoginInput) (*AuthResponse, error) {
 	// Use a generic error message to avoid leaking whether an email exists
 	if user == nil {
 		return nil, fmt.Errorf("invalid email or password")
+	}
+	if !user.IsActive {
+		return nil, fmt.Errorf("account is inactive")
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password)); err != nil {

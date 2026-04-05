@@ -13,6 +13,11 @@ type UpdateRoleInput struct {
 	Role models.Role `json:"role" binding:"required"`
 }
 
+// UpdateStatusInput holds validated data for active/inactive status changes.
+type UpdateStatusInput struct {
+	IsActive bool `json:"is_active"`
+}
+
 // UpdateViewerVisibilityInput holds payload for replacing viewer-visible entries.
 type UpdateViewerVisibilityInput struct {
 	EntryIDs []string `json:"entry_ids" binding:"required"`
@@ -93,6 +98,42 @@ func (s *UserService) UpdateRole(targetUserID, requestingUserID string, newRole 
 			"Role changed from %s to %s for user %s",
 			target.Role, newRole, target.Email,
 		),
+	})
+
+	return nil
+}
+
+// UpdateStatus changes a user's active/inactive status.
+// An admin cannot deactivate themselves to prevent lockout.
+func (s *UserService) UpdateStatus(targetUserID, requestingUserID string, isActive bool) error {
+	if targetUserID == requestingUserID && !isActive {
+		return fmt.Errorf("you cannot deactivate your own account")
+	}
+
+	target, err := s.userRepo.FindByID(targetUserID)
+	if err != nil {
+		return fmt.Errorf("finding user: %w", err)
+	}
+	if target == nil {
+		return fmt.Errorf("user not found")
+	}
+
+	if err := s.userRepo.UpdateStatus(targetUserID, isActive); err != nil {
+		return fmt.Errorf("updating status: %w", err)
+	}
+
+	actionWord := "deactivated"
+	if isActive {
+		actionWord = "activated"
+	}
+
+	_ = s.auditRepo.Log(&models.AuditLog{
+		ID:         uuid.New().String(),
+		UserID:     requestingUserID,
+		Action:     models.AuditActionUpdate,
+		Resource:   "user",
+		ResourceID: targetUserID,
+		Detail:     fmt.Sprintf("User %s was %s", target.Email, actionWord),
 	})
 
 	return nil

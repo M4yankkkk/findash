@@ -68,6 +68,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	resp, err := h.authService.Login(input)
 	if err != nil {
+		if err.Error() == "account is inactive" {
+			utils.Forbidden(c, "account is inactive")
+			return
+		}
 		// Always return 401 for auth failures — never reveal whether email exists
 		utils.Unauthorized(c, "invalid email or password")
 		return

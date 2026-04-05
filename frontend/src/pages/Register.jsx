@@ -1,15 +1,20 @@
 import { useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
+import api from "@/api/axios";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
-export default function Login() {
+export default function Register() {
   const navigate = useNavigate();
-  const { login, loading, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
+
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   if (isAuthenticated) {
@@ -20,11 +25,19 @@ export default function Login() {
     event.preventDefault();
     setError("");
 
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    setLoading(true);
     try {
-      await login({ email, password });
-      navigate("/dashboard", { replace: true });
+      await api.post("/auth/register", { name, email, password });
+      navigate("/login", { replace: true });
     } catch (err) {
-      setError(err.response?.data?.error || "Unable to login. Please check your credentials.");
+      setError(err.response?.data?.error || "Unable to register. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -33,11 +46,16 @@ export default function Login() {
       <Card className="w-full max-w-md border-ash-700/50 bg-ash-900/70">
         <CardHeader>
           <p className="text-xs uppercase tracking-[0.25em] text-ash-300">FinDash</p>
-          <CardTitle className="text-2xl">Welcome Back</CardTitle>
-          <CardDescription>Log in to your finance dashboard.</CardDescription>
+          <CardTitle className="text-2xl">Create Account</CardTitle>
+          <CardDescription>Register to access the finance dashboard.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm text-muted-foreground">Name</label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} required placeholder="John Doe" />
+            </div>
+
             <div className="space-y-2">
               <label className="text-sm text-muted-foreground">Email</label>
               <Input
@@ -56,20 +74,31 @@ export default function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                placeholder="••••••••"
+                placeholder="At least 8 characters"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-muted-foreground">Confirm Password</label>
+              <Input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                placeholder="Repeat your password"
               />
             </div>
 
             {error ? <p className="text-sm text-rose-300">{error}</p> : null}
 
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Signing in..." : "Sign In"}
+              {loading ? "Creating account..." : "Register"}
             </Button>
 
             <p className="text-sm text-muted-foreground">
-              New here?{" "}
-              <Link to="/register" className="text-ash-300 underline underline-offset-4 hover:text-ash-200">
-                Create an account
+              Already have an account?{" "}
+              <Link to="/login" className="text-ash-300 underline underline-offset-4 hover:text-ash-200">
+                Sign in
               </Link>
             </p>
           </form>

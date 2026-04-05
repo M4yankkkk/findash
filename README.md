@@ -19,8 +19,10 @@ A backend REST API for a role-based finance dashboard system. Built with Go, Gin
 ## Features
 
 - **Role-Based Access Control** — three roles: `admin`, `manager`, `viewer`
+- **User Status Management** — users can be marked active/inactive
 - **Financial Entry Management** — create, read, update, soft-delete income/expense records
 - **Analytics** — summary totals, category breakdown, monthly trend
+- **Viewer Visibility Assignment** — manager/admin assign which entries each viewer can access
 - **Audit Logging** — every significant action is recorded
 - **Pagination + Search** — all list endpoints support page, page_size, and filters
 - **Soft Deletes** — financial records are never hard-deleted
@@ -108,6 +110,8 @@ Migrations run automatically on startup. You should see:
 ✅ Migration applied: 001_create_users.sql
 ✅ Migration applied: 002_create_entries.sql
 ✅ Migration applied: 003_create_audit_logs.sql
+✅ Migration applied: 004_create_entry_visibility_assignments.sql
+✅ Migration applied: 005_add_user_status.sql
 🚀 Server running on port 8080
 ```
 
@@ -118,15 +122,19 @@ Migrations run automatically on startup. You should see:
 | Action                  | Viewer | Manager | Admin |
 |-------------------------|--------|---------|-------|
 | Register / Login        | ✅     | ✅      | ✅    |
-| View own entries        | ✅     | ✅      | ✅    |
+| View assigned entries   | ✅     | ❌      | ❌    |
+| View own entries        | ❌     | ✅      | ✅    |
 | View all entries        | ❌     | ❌      | ✅    |
 | Create entry            | ❌     | ✅      | ✅    |
 | Update own entry        | ❌     | ✅      | ✅    |
 | Delete own entry        | ❌     | ✅      | ✅    |
 | Update/delete any entry | ❌     | ❌      | ✅    |
+| View dashboard summary  | ✅     | ✅      | ✅    |
 | View analytics          | ❌     | ✅      | ✅    |
 | List all users          | ❌     | ❌      | ✅    |
 | Change user roles       | ❌     | ❌      | ✅    |
+| Change user active status | ❌   | ❌      | ✅    |
+| Assign viewer visibility | ❌    | ✅      | ✅    |
 
 > The first registered user is automatically assigned the `admin` role.
 
@@ -163,6 +171,14 @@ POST /api/v1/auth/login
 }
 ```
 
+If the account is inactive, login returns:
+```json
+{
+  "success": false,
+  "error": "account is inactive"
+}
+```
+
 ---
 
 ### Users (Admin only)
@@ -172,6 +188,7 @@ POST /api/v1/auth/login
 | GET    | /users              | List all users      |
 | GET    | /users/:id          | Get user by ID      |
 | PATCH  | /users/:id/role     | Update user's role  |
+| PATCH  | /users/:id/status   | Update active status|
 
 **Query params for GET /users:**
 - `page` (default: 1)
@@ -180,6 +197,26 @@ POST /api/v1/auth/login
 **Update role body:**
 ```json
 { "role": "manager" }
+```
+
+**Update status body:**
+```json
+{ "is_active": false }
+```
+
+---
+
+### Viewer Visibility (Manager + Admin)
+
+| Method | Endpoint                              | Description                                   |
+|--------|---------------------------------------|-----------------------------------------------|
+| GET    | /viewer-visibility/viewers            | List viewer users                              |
+| GET    | /viewer-visibility/:id/entries        | Get entry IDs visible to viewer                |
+| PUT    | /viewer-visibility/:id/entries        | Replace viewer-visible entry assignments       |
+
+**Update visibility body:**
+```json
+{ "entry_ids": ["uuid-1", "uuid-2"] }
 ```
 
 ---
@@ -242,6 +279,14 @@ POST /api/v1/auth/login
 
 ---
 
+### Dashboard Summary (All Roles)
+
+| Method | Endpoint           | Description                                                             |
+|--------|--------------------|-------------------------------------------------------------------------|
+| GET    | /dashboard/summary | Summary cards data; viewers get assigned-entry scope, others role scope |
+
+---
+
 ## Standard Response Format
 
 All responses follow a consistent envelope:
@@ -299,7 +344,7 @@ Paginated responses:
 Financial records are never permanently deleted. `deleted_at` is set instead of removing the row. This preserves audit integrity and allows potential recovery.
 
 **Generic auth error messages**  
-Login always returns `"invalid email or password"` regardless of whether the email exists. This prevents user enumeration attacks.
+Login returns `"invalid email or password"` for invalid credentials to prevent user enumeration. Inactive accounts return `"account is inactive"` with `403`.
 
 **First user is admin**  
 The first registered user automatically receives the `admin` role. This avoids needing a manual seeding step and is documented clearly.
@@ -311,7 +356,12 @@ An admin cannot change their own role, preventing accidental lockout.
 Audit log failures use `_ =` (ignored errors) so a logging hiccup never blocks the main operation.
 
 **Admin data scoping**  
-Admins see all data in analytics and entries. Other roles are scoped to their own records at the service layer, not the route layer.
+Admins see all data in analytics and entries.
+Managers are scoped to their own entries.
+Viewers are scoped to explicitly assigned entries through the visibility mapping table.
+
+**Inactive account login block**
+Inactive users cannot log in. Admins can disable accounts via status endpoint.
 
 **No unit tests**  
 Given the assignment timeline, unit tests were omitted in favour of a complete, well-structured implementation. The handler → service → repository separation makes the codebase straightforward to test with standard Go testing patterns.
@@ -328,3 +378,20 @@ swag init -g cmd/main.go
 ```
 
 Then visit: `http://localhost:8080/swagger/index.html`
+
+---
+
+## Frontend (Optional)
+
+A minimal React + Vite frontend is available under `frontend/`.
+
+Run locally:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Frontend auth routes:
+- `/login`
+- `/register`

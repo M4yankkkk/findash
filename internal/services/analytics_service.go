@@ -44,12 +44,7 @@ func NewAnalyticsService(analyticsRepo *repository.AnalyticsRepository) *Analyti
 // GetSummary returns total income, expenses, and net balance.
 // Admins see the global summary; others see only their own data.
 func (s *AnalyticsService) GetSummary(userID string, role models.Role) (*SummaryResult, error) {
-	scopedUserID := userID
-	if role == models.RoleAdmin {
-		scopedUserID = ""
-	}
-
-	rows, err := s.analyticsRepo.AggregateSummary(scopedUserID)
+	rows, err := s.getSummaryRows(userID, role)
 	if err != nil {
 		return nil, fmt.Errorf("fetching summary: %w", err)
 	}
@@ -66,6 +61,40 @@ func (s *AnalyticsService) GetSummary(userID string, role models.Role) (*Summary
 	result.NetBalance = result.TotalIncome - result.TotalExpenses
 
 	return result, nil
+}
+
+// GetDashboardSummary returns summary cards scoped to the requester's dashboard visibility.
+func (s *AnalyticsService) GetDashboardSummary(userID string, role models.Role) (*SummaryResult, error) {
+	rows, err := s.getSummaryRows(userID, role)
+	if err != nil {
+		return nil, fmt.Errorf("fetching dashboard summary: %w", err)
+	}
+
+	result := &SummaryResult{}
+	for _, row := range rows {
+		result.EntryCount += row.Count
+		if row.Type == string(models.EntryTypeIncome) {
+			result.TotalIncome = row.Total
+		} else {
+			result.TotalExpenses = row.Total
+		}
+	}
+	result.NetBalance = result.TotalIncome - result.TotalExpenses
+
+	return result, nil
+}
+
+func (s *AnalyticsService) getSummaryRows(userID string, role models.Role) ([]repository.AggregateRow, error) {
+	if role == models.RoleViewer {
+		return s.analyticsRepo.AggregateSummaryForViewer(userID)
+	}
+
+	scopedUserID := userID
+	if role == models.RoleAdmin {
+		scopedUserID = ""
+	}
+
+	return s.analyticsRepo.AggregateSummary(scopedUserID)
 }
 
 // GetByCategory returns a breakdown of totals grouped by category and type.

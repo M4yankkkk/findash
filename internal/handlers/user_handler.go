@@ -110,6 +110,32 @@ func (h *UserHandler) UpdateRole(c *gin.Context) {
 	utils.OK(c, "role updated successfully", nil)
 }
 
+// UpdateStatus changes a user's active/inactive status.
+func (h *UserHandler) UpdateStatus(c *gin.Context) {
+	targetID := c.Param("id")
+	requestingUserID := c.GetString(middleware.ContextKeyUserID)
+
+	var input services.UpdateStatusInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+
+	if err := h.userService.UpdateStatus(targetID, requestingUserID, input.IsActive); err != nil {
+		switch err.Error() {
+		case "user not found":
+			utils.NotFound(c, err.Error())
+		case "you cannot deactivate your own account":
+			utils.BadRequest(c, err.Error())
+		default:
+			utils.InternalError(c, "failed to update user status")
+		}
+		return
+	}
+
+	utils.OK(c, "user status updated successfully", nil)
+}
+
 // ListViewers returns paginated users with viewer role for assignment flows.
 func (h *UserHandler) ListViewers(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))

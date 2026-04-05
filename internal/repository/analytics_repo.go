@@ -69,6 +69,38 @@ func (r *AnalyticsRepository) AggregateSummary(userID string) ([]AggregateRow, e
 	return results, rows.Err()
 }
 
+// AggregateSummaryForViewer returns totals grouped by type for entries assigned to a viewer.
+func (r *AnalyticsRepository) AggregateSummaryForViewer(viewerID string) ([]AggregateRow, error) {
+	query := `
+		SELECT
+			e.type,
+			'' AS category,
+			COALESCE(SUM(e.amount), 0) AS total,
+			COUNT(*) AS count
+		FROM financial_entries e
+		JOIN entry_visibility_assignments v ON v.entry_id = e.id
+		WHERE e.deleted_at IS NULL
+		  AND v.viewer_id = $1
+		GROUP BY e.type`
+
+	rows, err := r.db.Query(query, viewerID)
+	if err != nil {
+		return nil, fmt.Errorf("aggregate viewer summary: %w", err)
+	}
+	defer rows.Close()
+
+	var results []AggregateRow
+	for rows.Next() {
+		var row AggregateRow
+		if err := rows.Scan(&row.Type, &row.Category, &row.Total, &row.Count); err != nil {
+			return nil, fmt.Errorf("scan viewer summary row: %w", err)
+		}
+		results = append(results, row)
+	}
+
+	return results, rows.Err()
+}
+
 // AggregateByCategory returns totals grouped by category and type, ordered by total descending.
 // If userID is empty, aggregates across all users (admin view).
 func (r *AnalyticsRepository) AggregateByCategory(userID string) ([]AggregateRow, error) {

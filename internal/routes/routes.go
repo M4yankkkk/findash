@@ -62,6 +62,7 @@ func Setup(r *gin.Engine, db *database.DB, cfg *config.Config) {
 			users.GET("", userHandler.ListUsers)
 			users.GET("/:id", userHandler.GetUser)
 			users.PATCH("/:id/role", userHandler.UpdateRole)
+			users.PATCH("/:id/status", userHandler.UpdateStatus)
 		}
 
 		visibility := auth.Group("/viewer-visibility")
@@ -81,6 +82,9 @@ func Setup(r *gin.Engine, db *database.DB, cfg *config.Config) {
 			entries.PUT("/:id", middleware.RequireManagerOrAdmin(), entryHandler.UpdateEntry)
 			entries.DELETE("/:id", middleware.RequireRole(models.RoleAdmin, models.RoleManager), entryHandler.DeleteEntry)
 		}
+
+		// Analytics — manager and admin only
+		auth.GET("/dashboard/summary", analyticsHandler.GetDashboardSummary)
 
 		// Analytics — manager and admin only
 		analytics := auth.Group("/analytics")

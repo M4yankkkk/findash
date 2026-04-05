@@ -19,6 +19,7 @@ export default function Users() {
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [updatingId, setUpdatingId] = useState("");
+  const [statusUpdatingId, setStatusUpdatingId] = useState("");
 
   const [viewers, setViewers] = useState([]);
   const [selectedViewerID, setSelectedViewerID] = useState("");
@@ -105,6 +106,16 @@ export default function Users() {
       setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, role } : u)));
     } finally {
       setUpdatingId("");
+    }
+  };
+
+  const handleStatusChange = async (userId, isActive) => {
+    setStatusUpdatingId(userId);
+    try {
+      await api.patch(`/users/${userId}/status`, { is_active: isActive });
+      setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, is_active: isActive } : u)));
+    } finally {
+      setStatusUpdatingId("");
     }
   };
 
@@ -217,7 +228,9 @@ export default function Users() {
                     <TableHead>Name</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
+                    <TableHead>Status</TableHead>
                     <TableHead className="text-right">Update Role</TableHead>
+                    <TableHead className="text-right">Update Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -227,6 +240,11 @@ export default function Users() {
                       <TableCell>{listedUser.email}</TableCell>
                       <TableCell>
                         <Badge tone={listedUser.role}>{listedUser.role}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge tone={listedUser.is_active ? "income" : "expense"}>
+                          {listedUser.is_active ? "active" : "inactive"}
+                        </Badge>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="inline-flex items-center gap-2">
@@ -244,11 +262,25 @@ export default function Users() {
                           </select>
                         </div>
                       </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => handleStatusChange(listedUser.id, !listedUser.is_active)}
+                          disabled={statusUpdatingId === listedUser.id}
+                        >
+                          {statusUpdatingId === listedUser.id
+                            ? "Saving..."
+                            : listedUser.is_active
+                              ? "Deactivate"
+                              : "Activate"}
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                   {!users.length ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center text-muted-foreground">
+                      <TableCell colSpan={6} className="text-center text-muted-foreground">
                         No users found.
                       </TableCell>
                     </TableRow>

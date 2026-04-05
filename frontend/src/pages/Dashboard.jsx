@@ -18,7 +18,7 @@ export default function Dashboard() {
       setLoading(true);
       try {
         const [summaryRes, entriesRes] = await Promise.all([
-          api.get("/analytics/summary"),
+          api.get("/dashboard/summary"),
           api.get("/entries", { params: { page: 1, page_size: 5 } }),
         ]);
 
